@@ -100,3 +100,9 @@ variable "tags" {
     Game      = "Pathfinder2e"
   }
 }
+
+variable "foundry_domain" {
+  description = "Domain name for Foundry VTT (optional, for HTTPS)"
+  type        = string
+  default     = ""
+}

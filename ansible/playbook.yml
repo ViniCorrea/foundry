@@ -3,11 +3,12 @@
   hosts: foundry
   become: true
   vars_files:
-    - group_vars/all/vault.yml  # Pode ser usado com ou sem criptografia
+    - group_vars/all/vault.yml
 
   vars:
     foundry_data_dir: /opt/foundrydata
     foundry_port: 30000
+    foundry_domain: "{{ hostvars[inventory_hostname].foundry_domain | default('foundry.anemush.com') }}"
     docker_compose_version: "2.24.0"
 
   tasks:
@@ -90,6 +91,40 @@
         msg: "{{ compose_version.stdout }}"
       tags: [docker, compose]
 
+    - name: Install Caddy prerequisites
+      ansible.builtin.apt:
+        name:
+          - debian-keyring
+          - debian-archive-keyring
+          - apt-transport-https
+        state: present
+      tags: [caddy]
+
+    - name: Add Caddy GPG key
+      ansible.builtin.apt_key:
+        url: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+        state: present
+      tags: [caddy]
+
+    - name: Add Caddy repository
+      ansible.builtin.apt_repository:
+        repo: "deb https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main"
+        state: present
+      tags: [caddy]
+
+    - name: Install Caddy
+      ansible.builtin.apt:
+        name: caddy
+        state: present
+        update_cache: yes
+      tags: [caddy]
+
+    - name: Ensure Caddy service is enabled
+      ansible.builtin.systemd:
+        name: caddy
+        enabled: yes
+      tags: [caddy]
+
     - name: Create Foundry data directory
       ansible.builtin.file:
         path: "{{ foundry_data_dir }}"
@@ -132,6 +167,44 @@
         mode: '0755'
       tags: [foundry]
 
+    - name: Create Caddy log directory
+      ansible.builtin.file:
+        path: /var/log/caddy
+        state: directory
+        mode: '0755'
+        owner: caddy
+        group: caddy
+      tags: [caddy]
+
+    - name: Deploy Caddyfile
+      ansible.builtin.template:
+        src: templates/Caddyfile.j2
+        dest: /etc/caddy/Caddyfile
+        mode: '0644'
+        owner: root
+        group: root
+        validate: 'caddy validate --adapter caddyfile --config %s'
+      notify: Reload Caddy
+      tags: [caddy]
+
+    - name: Verify DNS resolution for domain
+      ansible.builtin.command: dig +short {{ foundry_domain }} @8.8.8.8
+      register: dns_check
+      changed_when: false
+      failed_when: dns_check.stdout == ""
+      tags: [caddy, verify]
+
+    - name: Display DNS resolution result
+      ansible.builtin.debug:
+        msg: "Domain {{ foundry_domain }} resolves to {{ dns_check.stdout }}"
+      tags: [caddy, verify]
+
+    - name: Start Caddy service
+      ansible.builtin.systemd:
+        name: caddy
+        state: started
+      tags: [caddy]
+
     - name: Deploy docker-compose.yml
       ansible.builtin.template:
         src: templates/docker-compose.yml.j2
@@ -165,3 +238,9 @@
         cmd: docker compose restart
         chdir: /opt/foundry
       tags: [foundry]
+
+    - name: Reload Caddy
+      ansible.builtin.systemd:
+        name: caddy
+        state: reloaded
+      tags: [caddy]

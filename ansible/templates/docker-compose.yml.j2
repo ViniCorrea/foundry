@@ -23,7 +23,7 @@ services:
       TZ: "America/Sao_Paulo"
 
     ports:
-      - "{{ foundry_port }}:30000"
+      - "127.0.0.1:{{ foundry_port }}:30000"
 
     volumes:
       - {{ foundry_data_dir }}:/data

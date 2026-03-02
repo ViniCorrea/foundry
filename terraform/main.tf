@@ -81,19 +81,20 @@ resource "azurerm_network_security_rule" "https" {
   network_security_group_name = azurerm_network_security_group.foundry.name
 }
 
-resource "azurerm_network_security_rule" "foundry" {
-  name                        = "AllowFoundryVTT"
-  priority                    = 130
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = tostring(var.foundry_port)
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = data.azurerm_resource_group.foundry.name
-  network_security_group_name = azurerm_network_security_group.foundry.name
-}
+# Commented out: Port 30000 no longer needed (Caddy handles HTTPS on 443)
+# resource "azurerm_network_security_rule" "foundry" {
+#   name                        = "AllowFoundryVTT"
+#   priority                    = 130
+#   direction                   = "Inbound"
+#   access                      = "Allow"
+#   protocol                    = "Tcp"
+#   source_port_range           = "*"
+#   destination_port_range      = tostring(var.foundry_port)
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "*"
+#   resource_group_name         = data.azurerm_resource_group.foundry.name
+#   network_security_group_name = azurerm_network_security_group.foundry.name
+# }
 
 resource "azurerm_network_interface" "foundry" {
   name                = "${var.project_name}-nic"
@@ -172,11 +173,12 @@ resource "local_file" "ansible_inventory" {
 
   content = <<-EOT
 [foundry]
-${azurerm_public_ip.foundry.ip_address} ansible_user=${var.vm_admin_username} ansible_ssh_private_key_file=~/.ssh/id_rsa
+${azurerm_public_ip.foundry.ip_address} ansible_user=${var.vm_admin_username} ansible_ssh_private_key_file=/root/.ssh/foundry_azure
 
 [foundry:vars]
 azure_storage_account=${azurerm_storage_account.foundry.name}
 azure_fileshare_name=${azurerm_storage_share.foundry.name}
+foundry_domain=${var.foundry_domain}
 EOT
 
   file_permission = "0644"
