@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  foundry:
+    image: felddy/foundryvtt:release
+    container_name: foundry-vtt
+    restart: unless-stopped
+
+    environment:
+      FOUNDRY_LICENSE_KEY: "{{ foundry_license_key }}"
+
+      FOUNDRY_ADMIN_KEY: "{{ foundry_admin_password }}"
+
+      # Credenciais para download automático do Foundry VTT
+      FOUNDRY_USERNAME: "{{ foundry_username }}"
+      FOUNDRY_PASSWORD: "{{ foundry_password }}"
+
+      FOUNDRY_MINIFY_STATIC_FILES: "true"
+      FOUNDRY_PROXY_PORT: "443"
+      FOUNDRY_PROXY_SSL: "false"
+      FOUNDRY_WORLD: ""
+
+      TZ: "America/Sao_Paulo"
+
+    ports:
+      - "{{ foundry_port }}:30000"
+
+    volumes:
+      - {{ foundry_data_dir }}:/data
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:30000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.8'
+          memory: 3G
+        reservations:
+          cpus: '0.5'
+          memory: 1G

@@ -1,0 +1,20 @@
+---
+# ============================================================
+# Arquivo de Exemplo para Secrets (ansible-vault)
+# ============================================================
+# Para usar:
+# 1. Copiar para vault.yml (mesmo diretório)
+# 2. Preencher valores reais
+# 3. Criptografar: ansible-vault encrypt vault.yml
+# 4. Nunca commitar vault.yml descriptografado!
+# ============================================================
+
+foundry_license_key: "YOUR-LICENSE-KEY-HERE"
+
+foundry_admin_password: "YOUR-STRONG-PASSWORD-HERE"
+
+azure_storage_account: "foundryst"
+
+azure_storage_account_key: "YOUR-STORAGE-ACCOUNT-KEY-HERE"
+
+azure_fileshare_name: "foundrydata"

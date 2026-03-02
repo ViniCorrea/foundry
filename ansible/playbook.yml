@@ -1,0 +1,167 @@
+---
+- name: Deploy Foundry VTT on Azure VM
+  hosts: foundry
+  become: true
+  vars_files:
+    - group_vars/all/vault.yml  # Pode ser usado com ou sem criptografia
+
+  vars:
+    foundry_data_dir: /opt/foundrydata
+    foundry_port: 30000
+    docker_compose_version: "2.24.0"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: [setup, apt]
+
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      tags: [setup, apt]
+
+    - name: Install Docker prerequisites
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - cifs-utils
+        state: present
+      tags: [docker]
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+      tags: [docker]
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+      tags: [docker]
+
+    - name: Install Docker Engine
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+      tags: [docker]
+
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
+      tags: [docker]
+
+    - name: Add user to docker group
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      tags: [docker]
+
+    - name: Download Docker Compose
+      ansible.builtin.get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      tags: [docker, compose]
+
+    - name: Verify Docker Compose installation
+      ansible.builtin.command: docker-compose --version
+      register: compose_version
+      changed_when: false
+      tags: [docker, compose]
+
+    - name: Display Docker Compose version
+      ansible.builtin.debug:
+        msg: "{{ compose_version.stdout }}"
+      tags: [docker, compose]
+
+    - name: Create Foundry data directory
+      ansible.builtin.file:
+        path: "{{ foundry_data_dir }}"
+        state: directory
+        mode: '0755'
+      tags: [storage]
+
+    - name: Create credentials file for Azure File Share
+      ansible.builtin.copy:
+        dest: /etc/smbcredentials
+        content: |
+          username={{ azure_storage_account }}
+          password={{ azure_storage_account_key }}
+        mode: '0600'
+        owner: root
+        group: root
+      no_log: true
+      tags: [storage]
+
+    - name: Mount Azure File Share via CIFS
+      ansible.posix.mount:
+        path: "{{ foundry_data_dir }}"
+        src: "//{{ azure_storage_account }}.file.core.windows.net/{{ azure_fileshare_name }}"
+        fstype: cifs
+        opts: "credentials=/etc/smbcredentials,uid=1000,gid=1000,dir_mode=0755,file_mode=0644,serverino,nosharesock,actimeo=30"
+        state: mounted
+      tags: [storage]
+
+    - name: Verify mount point
+      ansible.builtin.command: mountpoint -q {{ foundry_data_dir }}
+      register: mount_check
+      changed_when: false
+      failed_when: mount_check.rc != 0
+      tags: [storage]
+
+    - name: Create Foundry app directory
+      ansible.builtin.file:
+        path: /opt/foundry
+        state: directory
+        mode: '0755'
+      tags: [foundry]
+
+    - name: Deploy docker-compose.yml
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: /opt/foundry/docker-compose.yml
+        mode: '0644'
+      notify: Restart Foundry VTT
+      tags: [foundry]
+
+    - name: Pull Foundry VTT Docker image
+      ansible.builtin.shell:
+        cmd: docker compose pull
+        chdir: /opt/foundry
+      tags: [foundry, docker]
+
+    - name: Start Foundry VTT with Docker Compose
+      ansible.builtin.shell:
+        cmd: docker compose up -d
+        chdir: /opt/foundry
+      tags: [foundry, docker]
+
+    - name: Wait for Foundry VTT to be healthy
+      ansible.builtin.wait_for:
+        port: "{{ foundry_port }}"
+        delay: 10
+        timeout: 120
+      tags: [foundry]
+
+  handlers:
+    - name: Restart Foundry VTT
+      ansible.builtin.shell:
+        cmd: docker compose restart
+        chdir: /opt/foundry
+      tags: [foundry]
