@@ -160,6 +160,25 @@
       failed_when: mount_check.rc != 0
       tags: [storage]
 
+    - name: Create Foundry Config directory
+      ansible.builtin.file:
+        path: "{{ foundry_data_dir }}/Config"
+        state: directory
+        mode: '0755'
+        owner: 1000
+        group: 1000
+      tags: [foundry, storage]
+
+    - name: Deploy S3 configuration file
+      ansible.builtin.template:
+        src: templates/s3.json.j2
+        dest: "{{ foundry_data_dir }}/Config/s3.json"
+        mode: '0644'
+        owner: 1000
+        group: 1000
+      notify: Restart Foundry VTT
+      tags: [foundry, storage]
+
     - name: Create Foundry app directory
       ansible.builtin.file:
         path: /opt/foundry
