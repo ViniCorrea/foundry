@@ -18,3 +18,10 @@ azure_storage_account: "foundryst"
 azure_storage_account_key: "YOUR-STORAGE-ACCOUNT-KEY-HERE"
 
 azure_fileshare_name: "foundrydata"
+
+# Cloudflare R2 (S3-compatible storage) para mídia do Foundry
+cloudflare_r2_access_key_id: "YOUR-R2-ACCESS-KEY-ID-HERE"
+cloudflare_r2_secret_access_key: "YOUR-R2-SECRET-ACCESS-KEY-HERE"
+cloudflare_r2_endpoint: "https://YOUR-ACCOUNT-ID.r2.cloudflarestorage.com"
+cloudflare_r2_bucket_name: "foundry-media"
+cloudflare_r2_public_url: "https://foundry-media.your-domain.com"

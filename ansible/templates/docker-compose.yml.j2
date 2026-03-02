@@ -22,6 +22,13 @@ services:
 
       TZ: "America/Sao_Paulo"
 
+      # Cloudflare R2 S3-compatible storage for media offload
+      AWS_ACCESS_KEY_ID: "{{ cloudflare_r2_access_key_id }}"
+      AWS_SECRET_ACCESS_KEY: "{{ cloudflare_r2_secret_access_key }}"
+      AWS_S3_BUCKET: "{{ cloudflare_r2_bucket_name }}"
+      AWS_S3_ENDPOINT: "{{ cloudflare_r2_endpoint }}"
+      AWS_S3_REGION: "auto"
+
     ports:
       - "127.0.0.1:{{ foundry_port }}:30000"
 
