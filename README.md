@@ -201,7 +201,28 @@ ansible-playbook playbook.yml --vault-password-file .vault_pass
 
 ## Acesso ao Foundry VTT
 
-Após o deploy bem-sucedido:
+### HTTPS (Recomendado) ✅
+
+A partir do deploy com Caddy + Let's Encrypt:
+
+```bash
+# URL segura com SSL
+https://foundry.anemush.com
+```
+
+**Características:**
+- ✅ Certificado SSL automático (Let's Encrypt)
+- ✅ Renovação automática a cada 90 dias
+- ✅ HTTPS obrigatório (HTTP redireciona automaticamente)
+- ✅ Port 30000 não exposto externamente (apenas localhost)
+
+**Importante:**
+- DNS deve estar configurado **sem proxy do Cloudflare** (DNS only)
+- Se usar Cloudflare proxy, configure SSL/TLS mode como "Full (strict)"
+
+### HTTP Direto (Fallback)
+
+Apenas se HTTPS estiver indisponível:
 
 ```bash
 # Obter URL
@@ -210,10 +231,15 @@ terraform output foundry_url
 # Exemplo: http://XX.XX.XX.XX:30000
 ```
 
-1. Abrir URL no navegador
-2. Fazer login com a senha de admin do vault
-3. Instalar sistemas e módulos (Pathfinder 2e)
-4. Criar mundo e começar a jogar!
+**Nota:** Porta 30000 está bloqueada externamente por padrão. Apenas acessível via proxy reverso (Caddy) na porta 443.
+
+### Primeiro Acesso
+
+1. Abrir https://foundry.anemush.com no navegador
+2. Verificar certificado SSL (cadeado verde)
+3. Fazer login com a senha de admin do vault
+4. Instalar sistemas e módulos (Pathfinder 2e)
+5. Criar mundo e começar a jogar!
 
 ## Operação
 
@@ -232,7 +258,19 @@ ssh foundry-admin@$(terraform output -raw public_ip_address)
 ```bash
 ssh foundry-admin@<IP>
 cd /opt/foundry
-docker-compose logs -f foundry
+docker compose logs -f foundry
+```
+
+### Ver logs do Caddy (SSL/Reverse Proxy)
+
+```bash
+ssh foundry-admin@<IP>
+
+# Logs do serviço
+sudo journalctl -u caddy -n 100 -f
+
+# Logs de acesso (se configurado)
+sudo tail -f /var/log/caddy/foundry.log
 ```
 
 ### Restart do Foundry
@@ -240,7 +278,32 @@ docker-compose logs -f foundry
 ```bash
 ssh foundry-admin@<IP>
 cd /opt/foundry
-docker-compose restart foundry
+docker compose restart foundry
+```
+
+### Restart do Caddy
+
+```bash
+ssh foundry-admin@<IP>
+
+# Reload config (sem downtime)
+sudo systemctl reload caddy
+
+# Restart completo
+sudo systemctl restart caddy
+
+# Verificar status
+sudo systemctl status caddy
+```
+
+### Verificar Certificado SSL
+
+```bash
+# Data de expiração
+echo | openssl s_client -servername foundry.anemush.com -connect foundry.anemush.com:443 2>/dev/null | openssl x509 -noout -dates
+
+# Detalhes completos
+echo | openssl s_client -servername foundry.anemush.com -connect foundry.anemush.com:443 2>/dev/null | openssl x509 -noout -text
 ```
 
 ### Backup dos Dados
@@ -340,13 +403,79 @@ sudo dmesg | grep -i cifs
 ```bash
 # Ver logs
 cd /opt/foundry
-docker-compose logs foundry
+docker compose logs foundry
 
 # Verificar health
-docker-compose ps
+docker compose ps
 
 # Reiniciar
-docker-compose restart foundry
+docker compose restart foundry
+```
+
+### HTTPS não funciona / Erro de certificado
+
+**Sintoma**: Erro SSL, certificado inválido ou ERR_TOO_MANY_REDIRECTS
+
+**Causa comum**: Cloudflare proxy habilitado
+
+**Solução**:
+```bash
+# 1. Verificar DNS
+dig foundry.anemush.com +short
+# Deve retornar o IP da VM (20.206.93.55), não IPs do Cloudflare
+
+# 2. Se retornar IPs Cloudflare (104.x.x.x, 172.x.x.x):
+#    - No painel Cloudflare, desabilite o proxy (nuvem laranja → cinza)
+#    - Aguarde 5-10 minutos para propagação DNS
+
+# 3. Verificar logs Caddy
+ssh foundry-admin@<IP>
+sudo journalctl -u caddy -n 50
+
+# 4. Forçar nova obtenção de certificado
+sudo systemctl restart caddy
+```
+
+### Caddy em loop de reload
+
+**Sintoma**: `systemctl status caddy` mostra "reloading" infinito
+
+**Causa**: Erro no Caddyfile ou permissões de log
+
+**Solução**:
+```bash
+ssh foundry-admin@<IP>
+
+# Stop Caddy
+sudo systemctl stop caddy
+
+# Verificar Caddyfile
+sudo caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
+
+# Se erro de log, corrigir permissões
+sudo chown -R caddy:caddy /var/log/caddy
+sudo chmod 755 /var/log/caddy
+
+# Restart
+sudo systemctl start caddy
+```
+
+### Port 30000 não acessível (esperado)
+
+**Comportamento normal**: Porta 30000 está bloqueada externamente após configuração SSL.
+
+Foundry acessível apenas via:
+- ✅ HTTPS: https://foundry.anemush.com (porta 443)
+- ✅ Localhost na VM: http://localhost:30000
+
+Se precisar reabilitar acesso direto temporariamente:
+```bash
+# Editar docker-compose.yml
+cd /opt/foundry
+sudo nano docker-compose.yml
+# Mudar "127.0.0.1:30000:30000" para "30000:30000"
+
+sudo docker compose restart
 ```
 
 ## Limpeza (Destruir Infraestrutura)
