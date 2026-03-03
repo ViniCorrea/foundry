@@ -308,14 +308,56 @@ echo | openssl s_client -servername foundry.anemush.com -connect foundry.anemush
 
 ### Backup dos Dados
 
-Os dados do Foundry estão no Azure File Share (`foundrydata`). Para backup:
+**Backup Automatizado via Azure Backup** ✅
+
+A infraestrutura inclui backup automático diário do Azure File Share:
+
+- **Schedule**: Diário às 3:00 AM (horário de Brasília)
+- **Retention**: 30 dias (diário) + 12 semanas (semanal) + 12 meses (mensal)
+- **Vault**: `foundry-backup-vault` no Resource Group `foundry-rg`
+- **Custo**: ~$0/mês (dentro do free tier de 50GB do Azure)
+
+**Restaurar de um backup:**
+
+```bash
+# 1. Listar pontos de restauração disponíveis
+az backup recoverypoint list \
+  --resource-group foundry-rg \
+  --vault-name foundry-backup-vault \
+  --backup-management-type AzureStorage \
+  --workload-type AzureFileShare \
+  --container-name "StorageContainer;storage;foundry-rg;foundrystt607rj" \
+  --item-name "AzureFileShare;<hash>" \
+  --output table
+
+# 2. Restaurar para localização alternativa (recomendado)
+az backup restore restore-azurefileshare \
+  --resource-group foundry-rg \
+  --vault-name foundry-backup-vault \
+  --rp-name <recovery-point-name> \
+  --container-name "StorageContainer;storage;foundry-rg;foundrystt607rj" \
+  --item-name "AzureFileShare;<hash>" \
+  --target-storage-account foundrystt607rj \
+  --target-file-share foundrydata-restored \
+  --resolve-conflict Overwrite
+```
+
+**Restaurar via Azure Portal** (mais fácil):
+1. Portal Azure → Recovery Services vaults → `foundry-backup-vault`
+2. Backup items → Azure Storage (Azure Files)
+3. Selecionar file share → Restore
+4. Escolher ponto de restauração e localização
+
+**Backup manual (opcional):**
+
+Para backup local adicional antes de updates críticos:
 
 ```bash
 # Via Azure CLI
 az storage file download-batch \
   --destination ./backup \
   --source foundrydata \
-  --account-name foundryst
+  --account-name foundrystt607rj
 
 # Ou montar localmente via SMB e copiar
 ```
@@ -501,6 +543,7 @@ terraform destroy
 | VM Standard_B2s | 2 vCPU, 4GB RAM | ~$60 |
 | Public IP Static | Standard SKU | ~$4 |
 | Storage Account | Standard LRS, 50GB | ~$2 |
+| Azure Backup | File Share backups | ~$0 (free tier) |
 | Bandwidth | ~100GB egress | ~$5 |
 | **Total** | | **~$71/mês** |
 
