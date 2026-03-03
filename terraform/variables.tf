@@ -106,3 +106,42 @@ variable "foundry_domain" {
   type        = string
   default     = ""
 }
+
+variable "backup_retention_days" {
+  description = "Número de dias para manter backups diários"
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.backup_retention_days >= 7 && var.backup_retention_days <= 200
+    error_message = "Retention deve estar entre 7 e 200 dias."
+  }
+}
+
+variable "backup_retention_weeks" {
+  description = "Número de semanas para manter backups semanais (0 = desabilitado)"
+  type        = number
+  default     = 12
+
+  validation {
+    condition     = var.backup_retention_weeks >= 0 && var.backup_retention_weeks <= 200
+    error_message = "Retention deve estar entre 0 e 200 semanas."
+  }
+}
+
+variable "backup_retention_months" {
+  description = "Número de meses para manter backups mensais (0 = desabilitado)"
+  type        = number
+  default     = 12
+
+  validation {
+    condition     = var.backup_retention_months >= 0 && var.backup_retention_months <= 120
+    error_message = "Retention deve estar entre 0 e 120 meses."
+  }
+}
+
+variable "enable_backup" {
+  description = "Habilitar Azure Backup para o File Share (pode ser desabilitado para economizar custos)"
+  type        = bool
+  default     = true
+}

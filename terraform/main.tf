@@ -134,6 +134,51 @@ resource "azurerm_storage_share" "foundry" {
   quota                = var.fileshare_quota_gb
 }
 
+resource "azurerm_recovery_services_vault" "foundry" {
+  name                = "${var.project_name}-backup-vault"
+  location            = data.azurerm_resource_group.foundry.location
+  resource_group_name = data.azurerm_resource_group.foundry.name
+  sku                 = "Standard"
+
+  soft_delete_enabled = true
+
+  tags = var.tags
+}
+
+resource "azurerm_backup_policy_file_share" "foundry" {
+  name                = "${var.project_name}-daily-backup"
+  resource_group_name = data.azurerm_resource_group.foundry.name
+  recovery_vault_name = azurerm_recovery_services_vault.foundry.name
+
+  backup {
+    frequency = "Daily"
+    time      = "03:00"
+  }
+
+  retention_daily {
+    count = var.backup_retention_days
+  }
+
+  retention_weekly {
+    count    = var.backup_retention_weeks
+    weekdays = ["Sunday", "Monday"]
+  }
+
+  retention_monthly {
+    count    = var.backup_retention_months
+    weekdays = ["Monday"]
+    weeks    = ["First"]
+  }
+}
+
+resource "azurerm_backup_protected_file_share" "foundry" {
+  resource_group_name       = data.azurerm_resource_group.foundry.name
+  recovery_vault_name       = azurerm_recovery_services_vault.foundry.name
+  source_storage_account_id = azurerm_storage_account.foundry.id
+  source_file_share_name    = azurerm_storage_share.foundry.name
+  backup_policy_id          = azurerm_backup_policy_file_share.foundry.id
+}
+
 resource "azurerm_linux_virtual_machine" "foundry" {
   name                = "${var.project_name}-vm"
   resource_group_name = data.azurerm_resource_group.foundry.name

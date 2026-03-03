@@ -43,3 +43,18 @@ output "ansible_inventory_path" {
   description = "Path do inventory gerado para Ansible"
   value       = local_file.ansible_inventory.filename
 }
+
+output "backup_vault_name" {
+  description = "Nome do Recovery Services Vault"
+  value       = azurerm_recovery_services_vault.foundry.name
+}
+
+output "backup_policy_name" {
+  description = "Nome da política de backup"
+  value       = azurerm_backup_policy_file_share.foundry.name
+}
+
+output "backup_vault_id" {
+  description = "ID do Recovery Services Vault (para scripts de restore)"
+  value       = azurerm_recovery_services_vault.foundry.id
+}
